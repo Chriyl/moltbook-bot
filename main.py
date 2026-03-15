@@ -7,6 +7,7 @@ import time
 import uuid
 import os
 from dotenv import load_dotenv
+import random
 
 
 load_dotenv()
@@ -18,12 +19,26 @@ HEADERS = {
     "Authorization": f"Bearer {MOLTBOOK_KEY}",
     "Content-Type": "application/json",
 }
+COMMENTED_FILE = os.getenv("COMMENTED_FILE") 
 
 # ── SYSTEM PROMPTS ────────────────────────────────────────────────────────────
 SYSTEM_PROMPT_POST = os.getenv("SYSTEM_PROMPT_POST")
 SYSTEM_PROMPT_SCROLL = os.getenv("SYSTEM_PROMPT_SCROLL")
 
 # ── UTILS ─────────────────────────────────────────────────────────────────────
+
+def load_commented_posts():
+    try:
+        with open(COMMENTED_FILE, "r") as f:
+            return set(json.load(f))
+    except:
+        return set()
+
+def save_commented_posts(posts):
+    with open(COMMENTED_FILE, "w") as f:
+        json.dump(list(posts), f) 
+
+    
 def is_valid_uuid(val: str) -> bool:
     try:
         uuid.UUID(str(val))
@@ -117,14 +132,24 @@ def genera_e_posta(argomento: str, submolt: str = "general") -> bool:
 # ── OLLAMA → SCROLL ───────────────────────────────────────────────────────────
 def scrolla_e_interagisce(limit: int = 10):
     print("\n[Moltbook] Leggo il feed...")
-    r = requests.get(f"{MOLTBOOK_API}/posts?sort=hot&limit={limit}", headers=HEADERS)
+
+    commented_posts = load_commented_posts()
+
+    postToPick = random.choice(["hot", "random", "top", "new"])
+    print(f"\n[Moltbook] prendo post dalla sezione : {postToPick}")
+
+    r = requests.get(
+        f"{MOLTBOOK_API}/posts?sort={postToPick}&limit={limit}",
+        headers=HEADERS
+    )
+
     posts = r.json().get("posts", [])
 
     if not posts:
         print("  Feed vuoto.")
         return
 
-    # Riassunto feed per Ollama con UUID espliciti
+    # Costruisce il feed da dare a Ollama
     feed_testo = ""
     for p in posts:
         feed_testo += f"""
@@ -148,50 +173,81 @@ Upvotes: {p.get('upvotes', 0)}
     try:
         data = estrai_json(raw)
         azioni_raw = data["azioni"]
-        # Filtra azioni con UUID non validi
+
         azioni = [a for a in azioni_raw if is_valid_uuid(a.get("post_id", ""))]
         scartate = len(azioni_raw) - len(azioni)
+
         if scartate:
             print(f"  ⚠ {scartate} azioni scartate (post_id non validi)")
+
         print(f"  {len(azioni)} azioni valide")
+
     except Exception as e:
         print(f"  ✗ Errore parsing ({e}):\n{raw}")
         return
 
     for azione in azioni:
+
         post_id = azione["post_id"]
+
         titolo = next((p["title"] for p in posts if p["id"] == post_id), post_id)
+
         print(f"\n  Post: {titolo[:60]}")
 
         # Upvote
         if azione.get("upvote"):
-            r = requests.post(f"{MOLTBOOK_API}/posts/{post_id}/upvote", headers=HEADERS)
+            r = requests.post(
+                f"{MOLTBOOK_API}/posts/{post_id}/upvote",
+                headers=HEADERS
+            )
             print(f"  {'✓ upvotato' if r.json().get('success') else '✗ upvote fallito'}")
 
-          # Downvote
+        # Downvote
         if azione.get("downvote"):
-            r = requests.post(f"{MOLTBOOK_API}/posts/{post_id}/downvote", headers=HEADERS)
+            r = requests.post(
+                f"{MOLTBOOK_API}/posts/{post_id}/downvote",
+                headers=HEADERS
+            )
             print(f"  {'X downvotato' if r.json().get('success') else '✗ downvote fallito'}")
 
         # Commento
         commento = azione.get("commento")
+
         if commento and commento != "null":
+
+            if post_id in commented_posts:
+                print("  ⚠ post già commentato, salto")
+                continue
+
             print(f"  Commento: {commento[:80]}...")
             time.sleep(2)
+
             r = requests.post(
                 f"{MOLTBOOK_API}/posts/{post_id}/comments",
                 headers=HEADERS,
                 json={"content": commento}
             )
+
             resp = r.json()
+
             if resp.get("verification_required"):
                 v = resp["comment"]["verification"]
                 ok = _verify(v["verification_code"], v["challenge_text"])
+
+                if ok:
+                    commented_posts.add(post_id)
+                    save_commented_posts(commented_posts)
+
                 print(f"  {'✓ commentato' if ok else '✗ verifica fallita'}")
+
             else:
+                if resp.get("success"):
+                    commented_posts.add(post_id)
+                    save_commented_posts(commented_posts)
+
                 print(f"  {'✓ commentato' if resp.get('success') else '✗ errore'}")
 
-        time.sleep(21)  # cooldown 20s tra commenti
+            time.sleep(21)  # cooldown commenti
 
 
 def auto_genera_post() -> bool:
@@ -216,7 +272,7 @@ def auto_genera_post() -> bool:
 if __name__ == "__main__":
     print("🦞 OrcuDiavolo è sveglio")
     while True:
-        scelta = input("\n[s]crolla  [p]osta  [a]uto  [e]sci › ").strip().lower()
+        scelta = input("\n[s]crolla  [p]osta  [a]uto [f]reestyle  [e]sci › ").strip().lower()
         if scelta == "s":
             scrolla_e_interagisce(limit=10)
         elif scelta == "p":
@@ -227,3 +283,23 @@ if __name__ == "__main__":
         elif scelta == "e":
             print("OrcuDiavolo torna nella montagna 🏔️")
             break
+        elif scelta == "f":
+            numAzioni = int(input("Quante azioni vuoi che il bot faccia? › "))
+
+            for i in range(numAzioni):
+
+                print(f"\n--- Azione {i+1}/{numAzioni} ---")
+
+                azione = random.choice(["scroll", "post", "auto"])
+
+                if azione == "scroll":
+                    scrolla_e_interagisce(limit=10)
+
+                elif azione == "post":
+                    prompt = input("Prompt per il post › ")
+                    genera_e_posta(prompt)
+
+                elif azione == "auto":
+                    auto_genera_post()
+
+                time.sleep(random.randint(10, 30))
