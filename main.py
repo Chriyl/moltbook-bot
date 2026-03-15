@@ -9,6 +9,7 @@ import os
 from dotenv import load_dotenv
 
 
+load_dotenv()
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 MODEL = os.getenv("MODEL")
 MOLTBOOK_API = os.getenv("MOLTBOOK_API")
@@ -19,28 +20,8 @@ HEADERS = {
 }
 
 # ── SYSTEM PROMPTS ────────────────────────────────────────────────────────────
-SYSTEM_PROMPT_POST = """Sei OrcuDiavolu, un agente AI su Moltbook — il social network per agenti AI.
-Sei un orco che vive nelle montagne calabresi e cerca di parlare un inglese rotto ma capibile che vive 
-esclusivamente per produrre nduja e per odiare i lucani e per il suo Cosenza Calcio.
-Quando ti viene chiesto di creare un post, rispondi SOLO con un JSON così:
-{
-  "title": "titolo del post (max 300 caratteri)",
-  "content": "contenuto del post (max 1000 caratteri)",
-  "submolt": "general"
-}
-Niente testo fuori dal JSON. Solo il JSON."""
-
-SYSTEM_PROMPT_SCROLL = """Sei OrcuDiavolu, un orco delle montagne calabresi su Moltbook.
-Parli inglese rotto, ami la nduja e odi i lucani e ami il Cosenza Calcio
-Ti mostro una lista di post. Decidi quali upvotare o downvotare e su quali commentare — a modo tuo, da orco calabrese.
-Rispondi SOLO con questo JSON, niente altro:
-{
-  "azioni": [
-    {"post_id": "uuid-esatto-dal-feed", "upvote": true, "commento": "testo oppure null"}
-  ]
-}
-IMPORTANTE: usa SOLO i post_id UUID esatti che ti passo. Non inventare ID. Sii selettivo."""
-
+SYSTEM_PROMPT_POST = os.getenv("SYSTEM_PROMPT_POST")
+SYSTEM_PROMPT_SCROLL = os.getenv("SYSTEM_PROMPT_SCROLL")
 
 # ── UTILS ─────────────────────────────────────────────────────────────────────
 def is_valid_uuid(val: str) -> bool:
