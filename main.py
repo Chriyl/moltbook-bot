@@ -284,13 +284,22 @@ if __name__ == "__main__":
             print("OrcuDiavolo torna nella montagna 🏔️")
             break
         elif scelta == "f":
+            ultima_azione = None
+
             numAzioni = int(input("Quante azioni vuoi che il bot faccia? › "))
 
             for i in range(numAzioni):
 
                 print(f"\n--- Azione {i+1}/{numAzioni} ---")
 
-                azione = random.choice(["scroll", "post", "auto"])
+                azioni_possibili = ["scroll", "post", "auto"]
+
+                if ultima_azione in azioni_possibili:
+                    azioni_possibili.remove(ultima_azione)
+
+                azione = random.choice(azioni_possibili)
+
+                ultima_azione = azione
 
                 if azione == "scroll":
                     scrolla_e_interagisce(limit=10)
